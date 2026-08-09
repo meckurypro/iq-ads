@@ -58,6 +58,11 @@ export default function AdminDashboard() {
 
   const [uploadStage, setUploadStage] = useState<UploadStage>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  // True when the current upload has gone quiet for a while (screen
+  // locked, app backgrounded, weak signal). tus-js-client keeps
+  // retrying underneath — this only drives the reassurance message so
+  // the admin doesn't think progress was lost.
+  const [stalled, setStalled] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -291,6 +296,7 @@ export default function AdminDashboard() {
     setSaving(true);
     setUploadStage(null);
     setUploadProgress(0);
+    setStalled(false);
 
     const resolvedAspectRatio = await resolveAspectRatio();
 
@@ -301,9 +307,11 @@ export default function AdminDashboard() {
     if (mediaFile) {
       setUploadStage('media');
       setUploadProgress(0);
+      setStalled(false);
       const result = await uploadPortfolioFile(mediaFile, {
         prefix: 'media',
         onProgress: setUploadProgress,
+        onStalled: () => setStalled(true),
       });
       if (result.error || !result.url) {
         setSaving(false);
@@ -317,10 +325,12 @@ export default function AdminDashboard() {
     if (posterSource) {
       setUploadStage('poster');
       setUploadProgress(0);
+      setStalled(false);
       const result = await uploadPortfolioFile(posterSource, {
         prefix: 'posters',
         contentType: posterSource instanceof File ? posterSource.type : 'image/jpeg',
         onProgress: setUploadProgress,
+        onStalled: () => setStalled(true),
       });
       if (result.error || !result.url) {
         setSaving(false);
@@ -332,6 +342,7 @@ export default function AdminDashboard() {
     }
 
     setUploadStage('saving');
+    setStalled(false);
     const payload: PortfolioInput = { ...form, mediaUrl, posterUrl, aspectRatio };
     const result = editingId ? await updateItem(editingId, payload) : await createItem(payload);
 
@@ -362,8 +373,9 @@ export default function AdminDashboard() {
 
   const existingIsVideo = form.mediaType === 'video' && !mediaFile && !!form.mediaUrl;
 
-  const progressLabel =
-    uploadStage === 'media'
+  const progressLabel = stalled
+    ? 'Reconnecting… your progress is saved, hang tight.'
+    : uploadStage === 'media'
       ? `Uploading media… ${Math.round(uploadProgress * 100)}%`
       : uploadStage === 'poster'
         ? `Uploading thumbnail… ${Math.round(uploadProgress * 100)}%`
