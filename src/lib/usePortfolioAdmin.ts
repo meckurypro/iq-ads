@@ -16,6 +16,7 @@ interface Row {
   media_url: string;
   media_type: PortfolioItem['mediaType'];
   poster_url: string | null;
+  aspect_ratio: number | null;
   summary: string;
   created_at: string;
 }
@@ -29,6 +30,7 @@ function mapRow(row: Row): PortfolioItem {
     mediaUrl: row.media_url,
     mediaType: row.media_type,
     posterUrl: row.poster_url ?? undefined,
+    aspectRatio: row.aspect_ratio ?? null,
     summary: row.summary,
     createdAt: row.created_at,
   };
@@ -46,6 +48,7 @@ function toRowInput(input: PortfolioInput) {
     media_url: input.mediaUrl,
     media_type: input.mediaType,
     poster_url: input.posterUrl || null,
+    aspect_ratio: input.aspectRatio ?? null,
     summary: input.summary,
   };
 }
