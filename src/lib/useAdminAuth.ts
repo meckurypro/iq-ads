@@ -1,6 +1,6 @@
-// src/lib/useAdminAuth.ts
+// PLACE AT: src/lib/useAdminAuth.ts  (do not nest under src/src/)
 import { useEffect, useState } from 'react';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 // ASSUMPTION — flagged: admin status is checked against a
@@ -17,6 +17,10 @@ interface AdminAuthState {
   session: Session | null;
   isAdmin: boolean;
   error: string | null;
+}
+
+interface ProfileRow {
+  role: string | null;
 }
 
 export function useAdminAuth(): AdminAuthState {
@@ -40,7 +44,7 @@ export function useAdminAuth(): AdminAuthState {
         .from(PROFILES_TABLE)
         .select(ROLE_COLUMN)
         .eq('id', session.user.id)
-        .single();
+        .single<ProfileRow>();
 
       if (cancelled) return;
 
@@ -49,21 +53,24 @@ export function useAdminAuth(): AdminAuthState {
         return;
       }
 
-      const role = (data as Record<string, unknown> | null)?.[ROLE_COLUMN];
       setState({
         loading: false,
         session,
-        isAdmin: role === ADMIN_ROLE_VALUE,
+        isAdmin: data?.role === ADMIN_ROLE_VALUE,
         error: null,
       });
     }
 
-    supabase.auth.getSession().then(({ data }) => checkAdmin(data.session));
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState((s) => ({ ...s, loading: true }));
-      checkAdmin(session);
+    supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
+      checkAdmin(data.session);
     });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        setState((s) => ({ ...s, loading: true }));
+        checkAdmin(session);
+      },
+    );
 
     return () => {
       cancelled = true;
