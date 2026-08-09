@@ -1,8 +1,8 @@
-// src/App.tsx
+// PLACE AT: src/App.tsx (overwrite existing)
 import { Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
-import AdminPlaceholder from './pages/AdminPlaceholder';
 import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
 import ProtectedAdmin from './components/ProtectedAdmin';
 
 export default function App() {
@@ -14,13 +14,12 @@ export default function App() {
       <Route path="/admin/login" element={<AdminLogin />} />
 
       {/* Protected: bounces to /admin/login if there's no session or
-          the signed-in account isn't role = 'admin'. Swap
-          AdminPlaceholder for the real dashboard once it exists. */}
+          the signed-in account isn't role = 'admin'. */}
       <Route
         path="/admin/*"
         element={
           <ProtectedAdmin>
-            <AdminPlaceholder />
+            <AdminDashboard />
           </ProtectedAdmin>
         }
       />
