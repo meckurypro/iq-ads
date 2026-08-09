@@ -6,6 +6,7 @@ export interface PortfolioItem {
   mediaUrl: string;
   mediaType: 'video' | 'image';
   posterUrl?: string;
+  aspectRatio: number | null;
   summary: string;
   createdAt: string;
 }
