@@ -33,7 +33,7 @@ export default function Hero() {
           Story, consistent characters, voice over, and an original jingle —
           produced end to end by IQ.
         </p>
-        <a href="#contact" className={styles.cta}>
+        <a href="/#work" className={styles.cta}>
           Start a project
         </a>
       </div>
