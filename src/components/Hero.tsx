@@ -27,7 +27,7 @@ export default function Hero() {
       <div className={`container ${styles.content} ${ready ? styles.in : ''}`}>
         <p className="eyebrow">Cinematic AI commercials</p>
         <h1 className={styles.headline}>
-          Tell us what you're building. We'll turn it into a film.
+          Your product, service, or event — turned into a film.
         </h1>
         <p className={styles.sub}>
           Story, consistent characters, voice over, and an original jingle —
