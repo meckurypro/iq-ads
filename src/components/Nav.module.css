@@ -32,6 +32,11 @@
   letter-spacing: 0.02em;
 }
 
+.logoImg {
+  border-radius: 6px;
+  display: block;
+}
+
 .cta {
   position: relative;
   font-size: var(--step-sm);
