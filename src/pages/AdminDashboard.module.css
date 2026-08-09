@@ -254,6 +254,52 @@
   margin-top: var(--space-2);
 }
 
+.mediaPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.videoPreview {
+  width: 100%;
+  max-height: 240px;
+  border-radius: var(--radius);
+  background: #000;
+}
+
+.captureRow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.posterThumb {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.helperText {
+  font-size: var(--step-sm);
+  color: var(--bone-dim);
+  margin: 0;
+}
+
+.hiddenCanvas {
+  display: none;
+}
+
+.panel input[type='file'] {
+  border-bottom: none;
+  padding-block: 0.3rem;
+  font-size: var(--step-sm);
+  color: var(--bone-dim);
+}
+
 @media (max-width: 560px) {
   .row {
     grid-template-columns: 72px 1fr;
