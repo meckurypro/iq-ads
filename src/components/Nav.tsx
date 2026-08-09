@@ -14,10 +14,10 @@ export default function Nav() {
     <header className={`${styles.nav} ${scrolled ? styles.scrolled : ''}`}>
       <div className={`container ${styles.inner}`}>
         <a href="/" className={styles.mark} aria-label="IQ Ads home">
-          <img src="/logo.svg" alt="" width={28} height={28} />
+          <img src="/logo.png" alt="" width={28} height={28} className={styles.logoImg} />
           <span>IQ Ads</span>
         </a>
-        <a href="#contact" className={styles.cta}>
+        <a href="/#work" className={styles.cta}>
           Request a call
         </a>
       </div>
