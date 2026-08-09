@@ -1,81 +1,56 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { usePortfolio } from '../lib/usePortfolio';
-import FeedCard from './FeedCard';
+import PortfolioGrid from './PortfolioGrid';
+import ReelFeed from './ReelFeed';
 import styles from './Feed.module.css';
 
-// The feed loops ONCE after a clear "you've seen it all" CTA card,
-// then stops — a silent infinite scroll erodes trust once a visitor
-// notices repeated posts, and it also never lets them reach the
-// footer/contact section.
-const MAX_PASSES = 2;
+type Mode = 'grid' | 'feed';
 
 export default function Feed() {
   const { items, loading, error } = usePortfolio();
-  const [passes, setPasses] = useState(1);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<Mode>('grid');
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  useEffect(() => {
-    if (items.length === 0) return;
-    const el = sentinelRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setPasses((p) => Math.min(p + 1, MAX_PASSES));
-        }
-      },
-      { rootMargin: '400px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [items.length]);
+  const openFeedAt = (index: number) => {
+    setActiveIndex(index);
+    setMode('feed');
+  };
 
   return (
-    <section className={styles.feed} id="work">
-      <div className="container">
-        <p className="eyebrow">Selected work</p>
-        <h2 className={styles.heading}>The reel</h2>
+    <section id="work" className={`container ${styles.section}`}>
+      <div className={styles.header}>
+        <h2 className={styles.heading}>Selected work</h2>
+        <div className={styles.modeToggle}>
+          <button
+            type="button"
+            className={mode === 'grid' ? styles.modeActive : styles.modeButton}
+            onClick={() => setMode('grid')}
+            aria-pressed={mode === 'grid'}
+          >
+            Glance
+          </button>
+          <button
+            type="button"
+            className={mode === 'feed' ? styles.modeActive : styles.modeButton}
+            onClick={() => setMode('feed')}
+            aria-pressed={mode === 'feed'}
+          >
+            Reel
+          </button>
+        </div>
       </div>
 
       {loading && <p className={styles.status}>Loading the reel…</p>}
-
-      {error && (
-        <p className={styles.status}>
-          Couldn't load the portfolio right now. ({error})
-        </p>
-      )}
-
+      {error && <p className={styles.status}>Couldn't load the portfolio.</p>}
       {!loading && !error && items.length === 0 && (
         <p className={styles.status}>New work is on the way — check back soon.</p>
       )}
 
-      {!loading && !error && items.length > 0 && (
-        <>
-          <div className={styles.grid}>
-            {items.map((item, i) => (
-              <FeedCard key={`${item.id}-0`} item={item} index={i} />
-            ))}
-          </div>
-
-          <div className={styles.ctaCard}>
-            <p className={styles.ctaEyebrow}>That's the current reel</p>
-            <h3 className={styles.ctaHeading}>Want something like this for your brand?</h3>
-            <a href="#contact" className={styles.ctaLink}>
-              Start a project →
-            </a>
-          </div>
-
-          {Array.from({ length: passes - 1 }).map((_, passIndex) => (
-            <div className={styles.grid} key={`pass-${passIndex}`}>
-              {items.map((item, i) => (
-                <FeedCard key={`${item.id}-${passIndex + 1}`} item={item} index={i} />
-              ))}
-            </div>
-          ))}
-
-          {passes < MAX_PASSES && <div ref={sentinelRef} aria-hidden="true" />}
-        </>
+      {!loading && items.length > 0 && mode === 'grid' && (
+        <PortfolioGrid items={items} onSelect={openFeedAt} />
+      )}
+      {!loading && items.length > 0 && mode === 'feed' && (
+        <ReelFeed items={items} initialIndex={activeIndex} onClose={() => setMode('grid')} />
       )}
     </section>
   );
