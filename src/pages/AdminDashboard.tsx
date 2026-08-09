@@ -17,8 +17,17 @@ const EMPTY_FORM: PortfolioInput = {
   mediaUrl: '',
   mediaType: 'video',
   posterUrl: '',
+  aspectRatio: null,
   summary: '',
 };
+
+// sessionStorage key the form auto-saves a draft to. Text fields
+// only — File/Blob objects can't survive JSON.stringify or a page
+// reload, so they're never part of the draft (see the restore
+// banner in the JSX for how that limitation is communicated).
+const DRAFT_KEY = 'iqads_admin_draft_v1';
+
+type UploadStage = 'media' | 'poster' | 'saving' | null;
 
 export default function AdminDashboard() {
   const { items, loading, error, createItem, updateItem, deleteItem } = usePortfolioAdmin();
@@ -30,17 +39,28 @@ export default function AdminDashboard() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   // New file picked for the main media. null means "keep the
   // existing mediaUrl" (only relevant when editing).
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  // Real width/height ratio of whatever's currently in mediaFile,
+  // read off the actual video/image element once it loads. Null
+  // until then (or when editing without picking a new file).
+  const [mediaAspectRatio, setMediaAspectRatio] = useState<number | null>(null);
 
-  // Frame captured from the video preview, to upload as the poster.
-  const [posterBlob, setPosterBlob] = useState<Blob | null>(null);
+  // Poster/thumbnail for a video item — either a frame captured from
+  // the video preview, or an image uploaded directly. Either way it
+  // ends up here and is uploaded the same way at submit time.
+  const [posterSource, setPosterSource] = useState<File | Blob | null>(null);
   const [posterPreviewUrl, setPosterPreviewUrl] = useState<string | null>(null);
 
+  const [uploadStage, setUploadStage] = useState<UploadStage>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   const videoRef = useRef<HTMLVideoElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Revoke object URLs when they're replaced or the form closes, so
@@ -57,10 +77,63 @@ export default function AdminDashboard() {
     };
   }, [posterPreviewUrl]);
 
+  // Restore a draft left over from before the page reloaded. Mobile
+  // browsers routinely discard a backgrounded tab and reload it fresh
+  // to free memory, which otherwise silently wipes the whole form.
+  // Runs once, on mount.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { editingId: string | null; form: PortfolioInput };
+      setEditingId(draft.editingId);
+      setForm(draft.form);
+      setFormOpen(true);
+      setDraftRestored(true);
+    } catch {
+      // Corrupted or unreadable draft — start fresh rather than block.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the draft up to date while the form is open. Only text
+  // fields go in here on purpose (see DRAFT_KEY comment above).
+  useEffect(() => {
+    if (!formOpen) return;
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ editingId, form }));
+    } catch {
+      // Storage can throw in private browsing / when full — losing
+      // draft-recovery silently isn't worth surfacing an error for.
+    }
+  }, [formOpen, editingId, form]);
+
+  // Warn on an accidental close/refresh mid-upload. This can't stop
+  // the OS from discarding a backgrounded tab, but it does catch the
+  // more common case of the admin closing the tab themselves.
+  useEffect(() => {
+    if (!saving) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saving]);
+
+  function clearDraft() {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* see above */
+    }
+  }
+
   function resetFileState() {
     setMediaFile(null);
     setMediaPreviewUrl(null);
-    setPosterBlob(null);
+    setMediaAspectRatio(null);
+    setPosterSource(null);
     setPosterPreviewUrl(null);
   }
 
@@ -68,6 +141,7 @@ export default function AdminDashboard() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    setDraftRestored(false);
     resetFileState();
     setFormOpen(true);
   }
@@ -81,41 +155,61 @@ export default function AdminDashboard() {
       mediaUrl: item.mediaUrl,
       mediaType: item.mediaType,
       posterUrl: item.posterUrl ?? '',
+      aspectRatio: item.aspectRatio ?? null,
       summary: item.summary,
     });
     setFormError(null);
+    setDraftRestored(false);
     resetFileState();
     setFormOpen(true);
   }
 
   function closeForm() {
+    if (saving) return; // don't let an in-flight upload get orphaned
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
+    setDraftRestored(false);
     resetFileState();
+    clearDraft();
   }
 
   function handleMediaFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
-    setPosterBlob(null);
     if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
-    setPosterPreviewUrl(null);
 
+    setPosterSource(null);
+    setPosterPreviewUrl(null);
+    setMediaAspectRatio(null);
     setMediaFile(file);
     setMediaPreviewUrl(file ? URL.createObjectURL(file) : null);
   }
 
   function handleMediaTypeChange(mediaType: PortfolioItem['mediaType']) {
     setForm((f) => ({ ...f, mediaType }));
-    if (mediaFile) {
-      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
-      setMediaFile(null);
-      setMediaPreviewUrl(null);
-    }
-    setPosterBlob(null);
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
     if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+    setMediaFile(null);
+    setMediaPreviewUrl(null);
+    setMediaAspectRatio(null);
+    setPosterSource(null);
     setPosterPreviewUrl(null);
+  }
+
+  // Read the real aspect ratio off the freshly picked video, once
+  // its metadata is available.
+  function handleVideoMetadata() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    setMediaAspectRatio(video.videoWidth / video.videoHeight);
+  }
+
+  // Same, for a freshly picked image.
+  function handleImageMetadata() {
+    const img = imageRef.current;
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+    setMediaAspectRatio(img.naturalWidth / img.naturalHeight);
   }
 
   function captureFrame() {
@@ -133,12 +227,56 @@ export default function AdminDashboard() {
       (blob) => {
         if (!blob) return;
         if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
-        setPosterBlob(blob);
+        setPosterSource(blob);
         setPosterPreviewUrl(URL.createObjectURL(blob));
       },
       'image/jpeg',
       0.85,
     );
+  }
+
+  function handlePosterFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+    if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+    setPosterSource(file);
+    setPosterPreviewUrl(URL.createObjectURL(file));
+  }
+
+  // If the video/image metadata event hasn't fired yet by the time
+  // the admin hits submit, give it one more short chance before
+  // falling back to whatever ratio the form already had (e.g. when
+  // editing without replacing the file).
+  function resolveAspectRatio(): Promise<number | null> {
+    if (mediaAspectRatio) return Promise.resolve(mediaAspectRatio);
+    if (!mediaFile) return Promise.resolve(form.aspectRatio ?? null);
+
+    if (form.mediaType === 'video' && videoRef.current) {
+      const video = videoRef.current;
+      if (video.videoWidth && video.videoHeight) {
+        return Promise.resolve(video.videoWidth / video.videoHeight);
+      }
+      return new Promise((resolve) => {
+        const onLoaded = () => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          resolve(video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : null);
+        };
+        video.addEventListener('loadedmetadata', onLoaded);
+        setTimeout(() => {
+          video.removeEventListener('loadedmetadata', onLoaded);
+          resolve(null);
+        }, 3000);
+      });
+    }
+
+    if (form.mediaType === 'image' && imageRef.current) {
+      const img = imageRef.current;
+      if (img.naturalWidth && img.naturalHeight) {
+        return Promise.resolve(img.naturalWidth / img.naturalHeight);
+      }
+    }
+
+    return Promise.resolve(null);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -151,41 +289,59 @@ export default function AdminDashboard() {
     }
 
     setSaving(true);
+    setUploadStage(null);
+    setUploadProgress(0);
+
+    const resolvedAspectRatio = await resolveAspectRatio();
 
     let mediaUrl = form.mediaUrl;
     let posterUrl = form.posterUrl;
+    const aspectRatio = resolvedAspectRatio ?? form.aspectRatio ?? null;
 
     if (mediaFile) {
-      const result = await uploadPortfolioFile(mediaFile, { prefix: 'media' });
+      setUploadStage('media');
+      setUploadProgress(0);
+      const result = await uploadPortfolioFile(mediaFile, {
+        prefix: 'media',
+        onProgress: setUploadProgress,
+      });
       if (result.error || !result.url) {
         setSaving(false);
+        setUploadStage(null);
         setFormError(`Media upload failed: ${result.error ?? 'unknown error'}`);
         return;
       }
       mediaUrl = result.url;
     }
 
-    if (posterBlob) {
-      const result = await uploadPortfolioFile(posterBlob, {
+    if (posterSource) {
+      setUploadStage('poster');
+      setUploadProgress(0);
+      const result = await uploadPortfolioFile(posterSource, {
         prefix: 'posters',
-        contentType: 'image/jpeg',
+        contentType: posterSource instanceof File ? posterSource.type : 'image/jpeg',
+        onProgress: setUploadProgress,
       });
       if (result.error || !result.url) {
         setSaving(false);
-        setFormError(`Poster upload failed: ${result.error ?? 'unknown error'}`);
+        setUploadStage(null);
+        setFormError(`Thumbnail upload failed: ${result.error ?? 'unknown error'}`);
         return;
       }
       posterUrl = result.url;
     }
 
-    const payload: PortfolioInput = { ...form, mediaUrl, posterUrl };
+    setUploadStage('saving');
+    const payload: PortfolioInput = { ...form, mediaUrl, posterUrl, aspectRatio };
     const result = editingId ? await updateItem(editingId, payload) : await createItem(payload);
 
     setSaving(false);
+    setUploadStage(null);
     if (result.error) {
       setFormError(result.error);
       return;
     }
+    clearDraft();
     closeForm();
   }
 
@@ -204,7 +360,19 @@ export default function AdminDashboard() {
     navigate('/admin/login', { replace: true });
   }
 
-  const existingIsVideo = form.mediaType === 'video' && !mediaFile && form.mediaUrl;
+  const existingIsVideo = form.mediaType === 'video' && !mediaFile && !!form.mediaUrl;
+
+  const progressLabel =
+    uploadStage === 'media'
+      ? `Uploading media… ${Math.round(uploadProgress * 100)}%`
+      : uploadStage === 'poster'
+        ? `Uploading thumbnail… ${Math.round(uploadProgress * 100)}%`
+        : uploadStage === 'saving'
+          ? 'Saving…'
+          : 'Preparing…';
+
+  const progressWidth =
+    uploadStage === 'media' || uploadStage === 'poster' ? `${Math.round(uploadProgress * 100)}%` : '100%';
 
   return (
     <div className={styles.wrap}>
@@ -285,6 +453,13 @@ export default function AdminDashboard() {
               {editingId ? 'Edit portfolio item' : 'Add portfolio item'}
             </h2>
 
+            {draftRestored && (
+              <p className={styles.draftBanner}>
+                Recovered your draft text from before the page reloaded. If you'd picked a media
+                file or thumbnail, please reselect it — files can't survive a reload.
+              </p>
+            )}
+
             <label htmlFor="title">Title</label>
             <input
               id="title"
@@ -345,7 +520,8 @@ export default function AdminDashboard() {
               onChange={handleMediaFileChange}
             />
 
-            {/* New video just picked: scrub it and grab a frame. */}
+            {/* New video just picked: scrub it, grab a frame, or upload
+                a thumbnail image directly. */}
             {form.mediaType === 'video' && mediaPreviewUrl && (
               <div className={styles.mediaPreview}>
                 <video
@@ -353,32 +529,65 @@ export default function AdminDashboard() {
                   src={mediaPreviewUrl}
                   controls
                   className={styles.videoPreview}
+                  onLoadedMetadata={handleVideoMetadata}
                 />
                 <div className={styles.captureRow}>
                   <button type="button" className={styles.ghostButton} onClick={captureFrame}>
                     Use this frame as poster
                   </button>
+                  <span className={styles.orDivider}>or</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePosterFileChange}
+                    aria-label="Upload thumbnail image"
+                  />
                   {posterPreviewUrl && (
-                    <img src={posterPreviewUrl} alt="Captured poster frame" className={styles.posterThumb} />
+                    <img src={posterPreviewUrl} alt="Poster preview" className={styles.posterThumb} />
                   )}
                 </div>
                 <p className={styles.helperText}>
-                  Play or scrub to the frame you want, pause, then capture it.
+                  Play or scrub to the frame you want and capture it, or upload a thumbnail image
+                  directly.
                 </p>
               </div>
             )}
 
-            {/* Editing an existing video, no new file chosen yet: show
-                the current poster so it's clear one already exists. */}
-            {existingIsVideo && form.posterUrl && !posterPreviewUrl && (
+            {/* Editing an existing video, no new file chosen yet: still
+                let the admin swap just the thumbnail. */}
+            {existingIsVideo && (
               <div className={styles.mediaPreview}>
-                <img src={form.posterUrl} alt="Current poster" className={styles.posterThumb} />
-                <p className={styles.helperText}>Current poster. Pick a new media file to replace it.</p>
+                {(posterPreviewUrl || form.posterUrl) && (
+                  <img
+                    src={posterPreviewUrl ?? form.posterUrl}
+                    alt="Current poster"
+                    className={styles.posterThumb}
+                  />
+                )}
+                <div className={styles.captureRow}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePosterFileChange}
+                    aria-label="Replace thumbnail image"
+                  />
+                </div>
+                <p className={styles.helperText}>
+                  {posterPreviewUrl
+                    ? 'New thumbnail selected.'
+                    : 'Current poster. Pick a new media file above to re-capture, or upload a replacement thumbnail here.'}
+                </p>
               </div>
             )}
 
             {form.mediaType === 'image' && mediaPreviewUrl && (
-              <img src={mediaPreviewUrl} alt="" className={styles.posterThumb} />
+              <img
+                ref={imageRef}
+                src={mediaPreviewUrl}
+                alt=""
+                className={styles.posterThumb}
+                onLoad={handleImageMetadata}
+              />
             )}
 
             <canvas ref={canvasRef} className={styles.hiddenCanvas} />
@@ -394,8 +603,17 @@ export default function AdminDashboard() {
 
             {formError && <p className={styles.statusError}>{formError}</p>}
 
+            {saving && (
+              <div className={styles.progressWrap} aria-live="polite">
+                <p className={styles.progressLabel}>{progressLabel}</p>
+                <div className={styles.progressTrack}>
+                  <div className={styles.progressFill} style={{ width: progressWidth }} />
+                </div>
+              </div>
+            )}
+
             <div className={styles.panelActions}>
-              <button type="button" className={styles.ghostButton} onClick={closeForm}>
+              <button type="button" className={styles.ghostButton} onClick={closeForm} disabled={saving}>
                 Cancel
               </button>
               <button type="submit" className={styles.primaryButton} disabled={saving}>
