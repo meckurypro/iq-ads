@@ -67,6 +67,11 @@
   color: var(--brass-bright);
 }
 
+.ghostButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .dangerButton {
   background: transparent;
   color: #d98080;
@@ -275,6 +280,11 @@
   flex-wrap: wrap;
 }
 
+.orDivider {
+  font-size: var(--step-sm);
+  color: var(--bone-dim);
+}
+
 .posterThumb {
   width: 96px;
   height: 72px;
@@ -298,6 +308,42 @@
   padding-block: 0.3rem;
   font-size: var(--step-sm);
   color: var(--bone-dim);
+}
+
+/* Draft-recovery banner, shown when a form is restored after the
+   page reloaded (e.g. a backgrounded mobile tab getting discarded). */
+.draftBanner {
+  font-size: var(--step-sm);
+  color: var(--brass-bright);
+  background: rgba(201, 162, 90, 0.08);
+  border: 1px solid rgba(201, 162, 90, 0.25);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+  margin: 0 0 var(--space-1);
+}
+
+/* Upload progress bar, shown while saving is in flight. */
+.progressWrap {
+  margin-top: var(--space-2);
+}
+
+.progressLabel {
+  font-size: var(--step-sm);
+  color: var(--bone-dim);
+  margin: 0 0 0.3rem;
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(240, 235, 225, 0.08);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--brass);
+  transition: width var(--dur-fast) var(--ease-out);
 }
 
 @media (max-width: 560px) {
