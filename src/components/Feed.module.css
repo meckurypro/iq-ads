@@ -1,0 +1,51 @@
+.feed {
+  padding-block: var(--space-6) var(--space-5);
+}
+
+.heading {
+  font-size: var(--step-xl);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-5);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-3);
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: var(--space-3);
+}
+
+.ctaCard {
+  max-width: 1240px;
+  margin: var(--space-5) auto;
+  padding: var(--space-4) var(--space-3);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.ctaEyebrow {
+  font-size: var(--step-sm);
+  color: var(--bone-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ctaHeading {
+  font-size: var(--step-lg);
+  margin-block: var(--space-1) var(--space-2);
+}
+
+.ctaLink {
+  display: inline-block;
+  color: var(--brass-bright);
+  border-bottom: 1px solid var(--brass);
+  padding-bottom: 2px;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.ctaLink:hover {
+  color: var(--bone);
+}

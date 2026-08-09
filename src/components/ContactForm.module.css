@@ -1,0 +1,72 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 560px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.row label {
+  font-size: var(--step-sm);
+  color: var(--bone-dim);
+}
+
+.row input,
+.row textarea {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--bone);
+  font-family: var(--font-body);
+  font-size: var(--step-base);
+  padding-block: 0.6rem;
+  resize: vertical;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.row input:focus,
+.row textarea:focus {
+  border-color: var(--brass);
+}
+
+.submit {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  background: var(--brass);
+  color: var(--ink);
+  border: none;
+  padding: 0.85rem 1.75rem;
+  border-radius: var(--radius);
+  font-size: var(--step-sm);
+  letter-spacing: 0.04em;
+  transition: background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--brass-bright);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  color: #d98080;
+  font-size: var(--step-sm);
+}
+
+.success h3 {
+  font-size: var(--step-lg);
+  margin-bottom: var(--space-1);
+}
+
+.success p {
+  color: var(--bone-dim);
+  max-width: 46ch;
+}

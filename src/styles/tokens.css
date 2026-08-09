@@ -1,0 +1,39 @@
+:root {
+  /* Color */
+  --ink: #0b0c0e;
+  --ink-elevated: #1a1c1f;
+  --bone: #f0ebe1;
+  --bone-dim: #c9c3b6;
+  --brass: #a8894f;
+  --brass-bright: #c7a468;
+  --oxblood: #5c2a2a;
+  --line: rgba(240, 235, 225, 0.12);
+
+  /* Type */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --step-2xl: clamp(2.75rem, 3vw + 2rem, 5.5rem);
+  --step-xl: clamp(2rem, 2vw + 1.4rem, 3.25rem);
+  --step-lg: clamp(1.4rem, 1vw + 1.1rem, 1.85rem);
+  --step-md: 1.125rem;
+  --step-base: 1rem;
+  --step-sm: 0.875rem;
+
+  /* Spacing */
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2.5rem;
+  --space-5: 4rem;
+  --space-6: 6rem;
+  --space-7: 9rem;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 200ms;
+  --dur-med: 500ms;
+  --dur-slow: 900ms;
+
+  --radius: 2px;
+}
