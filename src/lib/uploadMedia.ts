@@ -1,15 +1,19 @@
 // PLACE AT: src/lib/uploadMedia.ts
+import * as tus from 'tus-js-client';
 import { supabase } from './supabase';
 
 const BUCKET = 'portfolio-media';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-// If no upload-progress event fires for this long, treat the request
-// as stuck — e.g. the tab was backgrounded and the OS suspended its
-// network stack — and fail it loudly instead of leaving the admin
-// staring at an infinite "Uploading…" spinner with no way to retry.
-const STALL_TIMEOUT_MS = 25_000;
+// Supabase's TUS endpoint requires exactly this chunk size — anything
+// else causes uploads to silently stall past the first chunk.
+const CHUNK_SIZE = 6 * 1024 * 1024;
+
+// Purely informational: if no bytes have moved in this long, let the
+// caller show a "still reconnecting" message. tus-js-client keeps
+// retrying underneath regardless — this doesn't fail the upload.
+const STALL_NOTICE_MS = 15_000;
 
 function generateId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -20,10 +24,7 @@ function extensionFor(fileName: string | undefined, contentType: string | undefi
   if (fileName) {
     const dot = fileName.lastIndexOf('.');
     if (dot !== -1) {
-      const ext = fileName
-        .slice(dot + 1)
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '');
+      const ext = fileName.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '');
       if (ext) return ext;
     }
   }
@@ -32,31 +33,45 @@ function extensionFor(fileName: string | undefined, contentType: string | undefi
 }
 
 interface UploadOptions {
-  // Folder within the bucket, e.g. 'media' or 'posters'.
   prefix: string;
   fileName?: string;
   contentType?: string;
-  // Called with a 0..1 fraction as the upload progresses, and once
-  // more with 1 on success. Also drives stall detection internally.
   onProgress?: (fraction: number) => void;
+  // Fires (possibly more than once) if the upload seems stuck. Purely a
+  // UI hint — tus keeps retrying in the background either way.
+  onStalled?: () => void;
 }
 
 interface UploadResult {
   url: string | null;
   error: string | null;
+  path?: string;
 }
 
-// Uploads a File (from an <input type="file">) or a Blob (e.g. a
-// captured video frame) to Supabase Storage and returns its public
-// URL. Requires the admin write policies in portfolio_media_bucket.sql.
+// Uploads a File or Blob to Supabase Storage using the TUS resumable
+// protocol instead of a single-shot XHR/fetch.
 //
-// Built on raw XMLHttpRequest rather than the supabase-js storage
-// client: the SDK's fetch-based upload has no progress events, so
-// there's no way to drive a progress bar or notice a stalled request
-// through it — both of which matter for large video files on mobile.
+// Why this fixes "upload disappears on screen lock": a plain upload is
+// one long HTTP request — if the tab gets suspended mid-flight (screen
+// lock, app switch, dropped signal), that request dies and there's no
+// way to pick it back up; the whole file has to be sent again from
+// byte zero. TUS instead sends the file in 6MB chunks and tracks how
+// many bytes the server has actually received. tus-js-client persists
+// that state (fingerprinted by file name/size/type/last-modified) in
+// localStorage, so when this code runs again — after unlocking the
+// phone, switching back to the tab, or even a reload — it finds the
+// interrupted upload and resumes from the last acknowledged chunk
+// instead of starting over.
+//
+// What this does NOT do: keep sending bytes while the tab is fully
+// suspended and the screen is locked. No browser API allows arbitrary
+// authenticated background uploads from a website — that's what native
+// apps use OS-level background sessions for. What changes here is that
+// coming back to an interrupted upload is a resume, not a restart,
+// which is the part that actually matters for "don't lose my progress."
 export async function uploadPortfolioFile(
   file: File | Blob,
-  { prefix, fileName, contentType, onProgress }: UploadOptions,
+  { prefix, fileName, contentType, onProgress, onStalled }: UploadOptions,
 ): Promise<UploadResult> {
   const resolvedContentType =
     contentType ?? (file instanceof File ? file.type : undefined) ?? 'application/octet-stream';
@@ -64,15 +79,10 @@ export async function uploadPortfolioFile(
   const ext = extensionFor(resolvedFileName, resolvedContentType);
   const path = `${prefix}/${generateId()}.${ext}`;
 
-  // Storage RLS checks the caller's session, so send the current
-  // access token (falling back to the anon key, though the admin
-  // write policies require a signed-in user to actually succeed).
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token ?? SUPABASE_ANON_KEY;
-  const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${path}`;
 
   const uploadError = await new Promise<string | null>((resolve) => {
-    const xhr = new XMLHttpRequest();
     let settled = false;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -85,49 +95,51 @@ export async function uploadPortfolioFile(
 
     const armStallTimer = () => {
       if (stallTimer) clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => {
-        finish(
-          'Upload stalled — no progress for a while. This can happen if you switched apps or lost connection mid-upload. Please try again.',
-        );
-        xhr.abort();
-      }, STALL_TIMEOUT_MS);
+      stallTimer = setTimeout(() => onStalled?.(), STALL_NOTICE_MS);
     };
 
-    xhr.open('POST', uploadUrl, true);
-    xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('Content-Type', resolvedContentType);
-    xhr.setRequestHeader('x-upsert', 'false');
-
-    xhr.upload.onprogress = (event) => {
-      armStallTimer();
-      if (event.lengthComputable && onProgress) {
-        onProgress(event.loaded / event.total);
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
+    const upload = new tus.Upload(file, {
+      endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000, 30000],
+      headers: {
+        authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY,
+        'x-upsert': 'false',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: CHUNK_SIZE,
+      metadata: {
+        bucketName: BUCKET,
+        objectName: path,
+        contentType: resolvedContentType,
+        cacheControl: '3600',
+      },
+      onError: (err) => {
+        finish(err instanceof Error ? err.message : 'Upload failed. Please try again.');
+      },
+      onProgress: (bytesUploaded, bytesTotal) => {
+        armStallTimer();
+        if (onProgress && bytesTotal > 0) {
+          onProgress(bytesUploaded / bytesTotal);
+        }
+      },
+      onSuccess: () => {
         onProgress?.(1);
         finish(null);
-        return;
-      }
-      let message = `Upload failed (status ${xhr.status})`;
-      try {
-        const parsed = JSON.parse(xhr.responseText);
-        if (parsed?.message) message = parsed.message;
-      } catch {
-        // Response wasn't JSON — keep the generic message.
-      }
-      finish(message);
-    };
+      },
+    });
 
-    xhr.onerror = () => finish('Network error during upload. Check your connection and try again.');
-    xhr.onabort = () => finish('Upload cancelled.');
-    xhr.ontimeout = () => finish('Upload timed out. Please try again.');
-
-    armStallTimer(); // also covers the request never starting at all
-    xhr.send(file);
+    // Look for a matching interrupted upload (same file fingerprint)
+    // before starting — this is what makes "screen locked mid-upload"
+    // resume instead of restart.
+    upload.findPreviousUploads().then((previousUploads) => {
+      if (previousUploads.length > 0) {
+        upload.resumeFromPreviousUpload(previousUploads[0]);
+      }
+      armStallTimer();
+      upload.start();
+    });
   });
 
   if (uploadError) {
@@ -135,5 +147,5 @@ export async function uploadPortfolioFile(
   }
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, error: null };
+  return { url: data.publicUrl, error: null, path };
 }
