@@ -1,7 +1,8 @@
-// PLACE AT: src/pages/AdminDashboard.tsx
-import { useState, type FormEvent } from 'react';
+// PLACE AT: src/pages/AdminDashboard.tsx (overwrite existing)
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePortfolioAdmin, type PortfolioInput } from '../lib/usePortfolioAdmin';
+import { uploadPortfolioFile } from '../lib/uploadMedia';
 import { signOutAdmin } from '../lib/useAdminAuth';
 import type { PortfolioItem } from '../types/portfolio';
 import styles from './AdminDashboard.module.css';
@@ -30,10 +31,44 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // New file picked for the main media. null means "keep the
+  // existing mediaUrl" (only relevant when editing).
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+
+  // Frame captured from the video preview, to upload as the poster.
+  const [posterBlob, setPosterBlob] = useState<Blob | null>(null);
+  const [posterPreviewUrl, setPosterPreviewUrl] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Revoke object URLs when they're replaced or the form closes, so
+  // we don't leak memory across multiple opens.
+  useEffect(() => {
+    return () => {
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    };
+  }, [mediaPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+    };
+  }, [posterPreviewUrl]);
+
+  function resetFileState() {
+    setMediaFile(null);
+    setMediaPreviewUrl(null);
+    setPosterBlob(null);
+    setPosterPreviewUrl(null);
+  }
+
   function openCreate() {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError(null);
+    resetFileState();
     setFormOpen(true);
   }
 
@@ -49,6 +84,7 @@ export default function AdminDashboard() {
       summary: item.summary,
     });
     setFormError(null);
+    resetFileState();
     setFormOpen(true);
   }
 
@@ -56,14 +92,94 @@ export default function AdminDashboard() {
     setFormOpen(false);
     setEditingId(null);
     setFormError(null);
+    resetFileState();
+  }
+
+  function handleMediaFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    setPosterBlob(null);
+    if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+    setPosterPreviewUrl(null);
+
+    setMediaFile(file);
+    setMediaPreviewUrl(file ? URL.createObjectURL(file) : null);
+  }
+
+  function handleMediaTypeChange(mediaType: PortfolioItem['mediaType']) {
+    setForm((f) => ({ ...f, mediaType }));
+    if (mediaFile) {
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+      setMediaFile(null);
+      setMediaPreviewUrl(null);
+    }
+    setPosterBlob(null);
+    if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+    setPosterPreviewUrl(null);
+  }
+
+  function captureFrame() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.videoWidth === 0) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        if (posterPreviewUrl) URL.revokeObjectURL(posterPreviewUrl);
+        setPosterBlob(blob);
+        setPosterPreviewUrl(URL.createObjectURL(blob));
+      },
+      'image/jpeg',
+      0.85,
+    );
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setFormError(null);
 
-    const result = editingId ? await updateItem(editingId, form) : await createItem(form);
+    if (!mediaFile && !form.mediaUrl) {
+      setFormError('Choose a media file.');
+      return;
+    }
+
+    setSaving(true);
+
+    let mediaUrl = form.mediaUrl;
+    let posterUrl = form.posterUrl;
+
+    if (mediaFile) {
+      const result = await uploadPortfolioFile(mediaFile, { prefix: 'media' });
+      if (result.error || !result.url) {
+        setSaving(false);
+        setFormError(`Media upload failed: ${result.error ?? 'unknown error'}`);
+        return;
+      }
+      mediaUrl = result.url;
+    }
+
+    if (posterBlob) {
+      const result = await uploadPortfolioFile(posterBlob, {
+        prefix: 'posters',
+        contentType: 'image/jpeg',
+      });
+      if (result.error || !result.url) {
+        setSaving(false);
+        setFormError(`Poster upload failed: ${result.error ?? 'unknown error'}`);
+        return;
+      }
+      posterUrl = result.url;
+    }
+
+    const payload: PortfolioInput = { ...form, mediaUrl, posterUrl };
+    const result = editingId ? await updateItem(editingId, payload) : await createItem(payload);
 
     setSaving(false);
     if (result.error) {
@@ -87,6 +203,8 @@ export default function AdminDashboard() {
     await signOutAdmin();
     navigate('/admin/login', { replace: true });
   }
+
+  const existingIsVideo = form.mediaType === 'video' && !mediaFile && form.mediaUrl;
 
   return (
     <div className={styles.wrap}>
@@ -206,9 +324,7 @@ export default function AdminDashboard() {
                 <select
                   id="mediaType"
                   value={form.mediaType}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, mediaType: e.target.value as PortfolioItem['mediaType'] }))
-                  }
+                  onChange={(e) => handleMediaTypeChange(e.target.value as PortfolioItem['mediaType'])}
                 >
                   {MEDIA_TYPES.map((m) => (
                     <option key={m} value={m}>
@@ -219,28 +335,53 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <label htmlFor="mediaUrl">Media URL</label>
+            <label htmlFor="mediaFile">
+              Media file{editingId && !mediaFile ? ' (leave empty to keep the current one)' : ''}
+            </label>
             <input
-              id="mediaUrl"
-              required
-              type="url"
-              placeholder="https://…"
-              value={form.mediaUrl}
-              onChange={(e) => setForm((f) => ({ ...f, mediaUrl: e.target.value }))}
+              id="mediaFile"
+              type="file"
+              accept={form.mediaType === 'video' ? 'video/*' : 'image/*'}
+              onChange={handleMediaFileChange}
             />
 
-            {form.mediaType === 'video' && (
-              <>
-                <label htmlFor="posterUrl">Poster URL (thumbnail for the video)</label>
-                <input
-                  id="posterUrl"
-                  type="url"
-                  placeholder="https://…"
-                  value={form.posterUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, posterUrl: e.target.value }))}
+            {/* New video just picked: scrub it and grab a frame. */}
+            {form.mediaType === 'video' && mediaPreviewUrl && (
+              <div className={styles.mediaPreview}>
+                <video
+                  ref={videoRef}
+                  src={mediaPreviewUrl}
+                  controls
+                  className={styles.videoPreview}
                 />
-              </>
+                <div className={styles.captureRow}>
+                  <button type="button" className={styles.ghostButton} onClick={captureFrame}>
+                    Use this frame as poster
+                  </button>
+                  {posterPreviewUrl && (
+                    <img src={posterPreviewUrl} alt="Captured poster frame" className={styles.posterThumb} />
+                  )}
+                </div>
+                <p className={styles.helperText}>
+                  Play or scrub to the frame you want, pause, then capture it.
+                </p>
+              </div>
             )}
+
+            {/* Editing an existing video, no new file chosen yet: show
+                the current poster so it's clear one already exists. */}
+            {existingIsVideo && form.posterUrl && !posterPreviewUrl && (
+              <div className={styles.mediaPreview}>
+                <img src={form.posterUrl} alt="Current poster" className={styles.posterThumb} />
+                <p className={styles.helperText}>Current poster. Pick a new media file to replace it.</p>
+              </div>
+            )}
+
+            {form.mediaType === 'image' && mediaPreviewUrl && (
+              <img src={mediaPreviewUrl} alt="" className={styles.posterThumb} />
+            )}
+
+            <canvas ref={canvasRef} className={styles.hiddenCanvas} />
 
             <label htmlFor="summary">Summary</label>
             <textarea
@@ -258,7 +399,7 @@ export default function AdminDashboard() {
                 Cancel
               </button>
               <button type="submit" className={styles.primaryButton} disabled={saving}>
-                {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add item'}
+                {saving ? 'Uploading…' : editingId ? 'Save changes' : 'Add item'}
               </button>
             </div>
           </form>
