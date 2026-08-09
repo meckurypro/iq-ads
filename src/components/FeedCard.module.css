@@ -13,6 +13,10 @@
 }
 
 .mediaWrap {
+  /* Overridden inline per-item to the media's real aspect ratio (see
+     FeedCard.tsx). This 4/5 is only a fallback for legacy rows with
+     no stored ratio, or the brief instant before the inline style
+     attaches. */
   aspect-ratio: 4 / 5;
   overflow: hidden;
   background: #000;
