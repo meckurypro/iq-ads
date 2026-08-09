@@ -63,10 +63,14 @@ export default function AdminDashboard() {
   // retrying underneath — this only drives the reassurance message so
   // the admin doesn't think progress was lost.
   const [stalled, setStalled] = useState(false);
+  // True while we hold an active screen wake lock, so the UI can hint
+  // that keeping the tab open/visible actually matters right now.
+  const [wakeLockActive, setWakeLockActive] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Revoke object URLs when they're replaced or the form closes, so
   // we don't leak memory across multiple opens.
@@ -124,6 +128,50 @@ export default function AdminDashboard() {
     }
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saving]);
+
+  // Keep the screen awake while an upload is in flight. This only
+  // stops the screen from auto-dimming/locking due to inactivity while
+  // the tab is open and visible — it can't survive the user pressing
+  // the power button or switching apps, and the browser silently drops
+  // the lock whenever the tab is hidden. We re-acquire on visibility
+  // change so a brief app-switch-and-back doesn't leave it off for the
+  // rest of the upload. Unsupported browsers (no navigator.wakeLock) no-op.
+  useEffect(() => {
+    if (!saving || !('wakeLock' in navigator)) return;
+
+    let cancelled = false;
+
+    async function acquire() {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        setWakeLockActive(true);
+        wakeLockRef.current.addEventListener('release', () => {
+          setWakeLockActive(false);
+        });
+      } catch {
+        // Denied, unsupported mid-flight, or tab hidden at request time —
+        // nothing to do; the upload itself is unaffected.
+        setWakeLockActive(false);
+      }
+    }
+
+    acquire();
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && !cancelled && !wakeLockRef.current) {
+        acquire();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+      setWakeLockActive(false);
+    };
   }, [saving]);
 
   function clearDraft() {
@@ -621,6 +669,12 @@ export default function AdminDashboard() {
                 <div className={styles.progressTrack}>
                   <div className={styles.progressFill} style={{ width: progressWidth }} />
                 </div>
+                {wakeLockActive && (
+                  <p className={styles.helperText}>
+                    Keeping this screen awake until the upload finishes — you can still switch
+                    apps, but locking the phone will pause it.
+                  </p>
+                )}
               </div>
             )}
 
