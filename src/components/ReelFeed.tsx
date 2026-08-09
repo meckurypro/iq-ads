@@ -8,6 +8,51 @@ interface ReelFeedProps {
   onClose?: () => void;
 }
 
+function SoundIcon({ on }: { on: boolean }) {
+  return on ? (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+      <path d="M16.5 8.5a5 5 0 010 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M18.5 6a8 8 0 010 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.6" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+      <path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M8 12l8-6m-8 6l8 6m-8-6H4m14 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zm0-16a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM6.5 14.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
 export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -48,7 +93,7 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
               video.muted = !soundOn;
               video.play().catch(() => {
                 // Some contexts still block autoplay — the tap-to-play
-                // hint below covers that case.
+                // hint covers that case.
               });
               setPlaying(true);
             }
@@ -83,8 +128,7 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
     }
   }, []);
 
-  const toggleSound = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleSound = useCallback(() => {
     setSoundOn((prev) => {
       const next = !prev;
       const video = videoRefs.current[activeIndex];
@@ -113,18 +157,9 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
     <div className={styles.feed} ref={containerRef}>
       {onClose && (
         <button type="button" className={styles.close} onClick={onClose} aria-label="Close reel">
-          ✕
+          <CloseIcon />
         </button>
       )}
-
-      <button
-        type="button"
-        className={styles.soundToggle}
-        onClick={toggleSound}
-        aria-label={soundOn ? 'Mute' : 'Unmute'}
-      >
-        {soundOn ? '🔊' : '🔇'}
-      </button>
 
       {items.map((item, index) => (
         <div
@@ -150,7 +185,9 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
           )}
 
           {index === activeIndex && !playing && item.mediaType === 'video' && (
-            <span className={styles.playHint} aria-hidden="true">▶</span>
+            <span className={styles.playHint} aria-hidden="true">
+              <PlayIcon />
+            </span>
           )}
 
           <div className={styles.overlay}>
@@ -158,14 +195,26 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
             <p className={styles.itemClient}>{item.client}</p>
           </div>
 
-          <button
-            type="button"
-            className={styles.shareButton}
-            onClick={(e) => { e.stopPropagation(); handleShare(item); }}
-            aria-label="Share"
-          >
-            ⤴
-          </button>
+          {index === activeIndex && (
+            <div className={styles.actionRail} onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className={styles.actionButton}
+                onClick={toggleSound}
+                aria-label={soundOn ? 'Mute' : 'Unmute'}
+              >
+                <SoundIcon on={soundOn} />
+              </button>
+              <button
+                type="button"
+                className={styles.actionButton}
+                onClick={() => handleShare(item)}
+                aria-label="Share"
+              >
+                <ShareIcon />
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
