@@ -17,6 +17,13 @@
   padding-inline: var(--space-3);
 }
 
+.status {
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: var(--space-3);
+  color: var(--bone-dim);
+}
+
 .ctaCard {
   max-width: 1240px;
   margin: var(--space-5) auto;
