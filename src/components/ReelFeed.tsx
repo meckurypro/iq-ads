@@ -14,6 +14,7 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const [playing, setPlaying] = useState(true);
+  const [soundOn, setSoundOn] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
             setActiveIndex(index);
             if (video && !reducedMotion) {
               video.currentTime = 0;
+              video.muted = !soundOn;
               video.play().catch(() => {
                 // Some contexts still block autoplay — the tap-to-play
                 // hint below covers that case.
@@ -60,7 +62,14 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
 
     itemRefs.current.forEach((el) => el && observer.observe(el));
     return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.length, reducedMotion]);
+
+  // Keep the active clip's mute state synced whenever sound is toggled.
+  useEffect(() => {
+    const video = videoRefs.current[activeIndex];
+    if (video) video.muted = !soundOn;
+  }, [soundOn, activeIndex]);
 
   const togglePlay = useCallback((index: number) => {
     const video = videoRefs.current[index];
@@ -73,6 +82,19 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
       setPlaying(false);
     }
   }, []);
+
+  const toggleSound = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSoundOn((prev) => {
+      const next = !prev;
+      const video = videoRefs.current[activeIndex];
+      if (video) {
+        video.muted = !next;
+        if (video.paused) video.play();
+      }
+      return next;
+    });
+  }, [activeIndex]);
 
   const handleShare = useCallback(async (item: PortfolioItem) => {
     const url = `${window.location.origin}/#work-${item.id}`;
@@ -94,6 +116,16 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
           ✕
         </button>
       )}
+
+      <button
+        type="button"
+        className={styles.soundToggle}
+        onClick={toggleSound}
+        aria-label={soundOn ? 'Mute' : 'Unmute'}
+      >
+        {soundOn ? '🔊' : '🔇'}
+      </button>
+
       {items.map((item, index) => (
         <div
           key={item.id}
