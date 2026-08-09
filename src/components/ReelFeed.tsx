@@ -27,7 +27,20 @@ function ShareIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M8 12l8-6m-8 6l8 6m-8-6H4m14 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zm0-16a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM6.5 14.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"
+        d="M5 14c0-5 4-8 8-8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 3l4 3-4 3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 12v6a1 1 0 01-1 1H6a1 1 0 01-1-1v-6a1 1 0 011-1h2"
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinecap="round"
