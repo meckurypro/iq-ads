@@ -4,10 +4,11 @@ import type { PortfolioItem } from '../types/portfolio';
 
 // ASSUMPTION — flagged, not silently guessed: this queries a table
 // named `iq_ads_portfolio` with snake_case columns matching
-// PortfolioItem (media_url, media_type, poster_url, created_at).
-// Once the real Meckury AI schema is shared, update TABLE_NAME and
-// the mapping below to match the actual table/column names — the
-// rest of the feed (fetch/loading/error/loop) does not need to change.
+// PortfolioItem (media_url, media_type, poster_url, aspect_ratio,
+// created_at). Once the real Meckury AI schema is shared, update
+// TABLE_NAME and the mapping below to match the actual table/column
+// names — the rest of the feed (fetch/loading/error/loop) does not
+// need to change.
 const TABLE_NAME = 'iq_ads_portfolio';
 
 interface Row {
@@ -18,6 +19,7 @@ interface Row {
   media_url: string;
   media_type: PortfolioItem['mediaType'];
   poster_url: string | null;
+  aspect_ratio: number | null;
   summary: string;
   created_at: string;
 }
@@ -31,6 +33,7 @@ function mapRow(row: Row): PortfolioItem {
     mediaUrl: row.media_url,
     mediaType: row.media_type,
     posterUrl: row.poster_url ?? undefined,
+    aspectRatio: row.aspect_ratio ?? null,
     summary: row.summary,
     createdAt: row.created_at,
   };
