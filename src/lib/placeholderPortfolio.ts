@@ -1,5 +1,4 @@
 import type { PortfolioItem } from '../types/portfolio';
-
 // Temporary local data. Once the Meckury AI schema is shared and the
 // iq_ads_portfolio table + RLS policies are added, this will be
 // replaced by a Supabase query in src/lib/supabase.ts.
@@ -12,6 +11,7 @@ export const placeholderPortfolio: PortfolioItem[] = [
     mediaUrl: '/portfolio/sample-1.mp4',
     posterUrl: '/portfolio/sample-1-poster.jpg',
     mediaType: 'video',
+    aspectRatio: 16 / 9,
     summary: 'From a single flyer upload to a full cinematic commercial.',
     createdAt: '2026-06-01',
   },
@@ -23,6 +23,7 @@ export const placeholderPortfolio: PortfolioItem[] = [
     mediaUrl: '/portfolio/sample-2.mp4',
     posterUrl: '/portfolio/sample-2-poster.jpg',
     mediaType: 'video',
+    aspectRatio: 16 / 9,
     summary: 'A launch-day campaign built around one recurring character.',
     createdAt: '2026-05-20',
   },
@@ -34,6 +35,7 @@ export const placeholderPortfolio: PortfolioItem[] = [
     mediaUrl: '/portfolio/sample-3.mp4',
     posterUrl: '/portfolio/sample-3-poster.jpg',
     mediaType: 'video',
+    aspectRatio: 16 / 9,
     summary: 'The same lead character carried across a full narrative arc.',
     createdAt: '2026-05-02',
   },
