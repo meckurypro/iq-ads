@@ -27,11 +27,11 @@ export default function Hero() {
       <div className={`container ${styles.content} ${ready ? styles.in : ''}`}>
         <p className="eyebrow">Cinematic AI commercials</p>
         <h1 className={styles.headline}>
-          Turn one flyer into a film your audience won't scroll past.
+          Tell us what you're building. We'll turn it into a film.
         </h1>
         <p className={styles.sub}>
           Story, consistent characters, voice over, and an original jingle —
-          produced end to end by IQ.
+          built around your brand by IQ, not assembled from a template.
         </p>
         <a href="/#work" className={styles.cta}>
           Start a project
