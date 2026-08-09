@@ -2,10 +2,25 @@
   border-top: 1px solid var(--line);
   padding-block: var(--space-3);
 }
-
 .inner {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: var(--step-sm);
   color: var(--bone-dim);
+}
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.adminLink {
+  color: var(--bone-dim);
+  text-decoration: none;
+  opacity: 0.6;
+  transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.adminLink:hover {
+  opacity: 1;
+  color: var(--brass-bright);
 }
