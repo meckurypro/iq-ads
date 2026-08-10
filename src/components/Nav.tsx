@@ -15,7 +15,7 @@ export default function Nav() {
           <img src="/logo.png" alt="" width={40} height={40} className={styles.logoImg} />
           <span>Ads</span>
         </a>
-        <a href="/#work" className={styles.cta}>
+        <a href="/#contact" className={styles.cta}>
           Request a call
         </a>
       </div>
