@@ -1,11 +1,9 @@
+// src/components/ContactSection.tsx
 import ContactForm from './ContactForm';
 import styles from './ContactSection.module.css';
-
 const PHONE = '+2348162465247';
-const PHONE_DISPLAY = '+234 816 246 5247';
 const EMAIL = 'Promptiq2026@gmail.com';
 const WHATSAPP_URL = `https://wa.me/${PHONE.replace('+', '')}`;
-
 export default function ContactSection() {
   return (
     <section id="contact" className={styles.section}>
@@ -16,19 +14,17 @@ export default function ContactSection() {
           <p className={styles.sub}>
             Send a brief, or reach out directly — whichever is faster for you.
           </p>
-
           <ul className={styles.direct}>
             <li>
               <a href={WHATSAPP_URL} target="_blank" rel="noreferrer">
-                WhatsApp — {PHONE_DISPLAY}
+                Message us on WhatsApp
               </a>
             </li>
             <li>
-              <a href={`mailto:${EMAIL}`}>{EMAIL}</a>
+              <a href={`mailto:${EMAIL}`}>Email us</a>
             </li>
           </ul>
         </div>
-
         <ContactForm />
       </div>
     </section>
