@@ -74,6 +74,13 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
   const [playing, setPlaying] = useState(true);
   const [soundOn, setSoundOn] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const hasAutoUnmutedRef = useRef(false);
+
+  const handleFirstInteraction = useCallback(() => {
+    if (hasAutoUnmutedRef.current) return;
+    hasAutoUnmutedRef.current = true;
+    setSoundOn(true);
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -142,6 +149,7 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
   }, []);
 
   const toggleSound = useCallback(() => {
+    hasAutoUnmutedRef.current = true;
     setSoundOn((prev) => {
       const next = !prev;
       const video = videoRefs.current[activeIndex];
@@ -167,7 +175,12 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
   }, []);
 
   return (
-    <div className={styles.feed} ref={containerRef}>
+    <div
+      className={styles.feed}
+      ref={containerRef}
+      onScroll={handleFirstInteraction}
+      onClick={handleFirstInteraction}
+    >
       {onClose && (
         <button type="button" className={styles.close} onClick={onClose} aria-label="Close reel">
           <CloseIcon />
@@ -188,7 +201,7 @@ export default function ReelFeed({ items, initialIndex = 0, onClose }: ReelFeedP
               className={styles.media}
               src={item.mediaUrl}
               poster={item.posterUrl}
-              muted
+              muted={!soundOn}
               loop
               playsInline
               preload={Math.abs(index - activeIndex) <= 1 ? 'auto' : 'none'}
